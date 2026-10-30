@@ -1,0 +1,5 @@
+# ST-generated files: keep them out of GitHub language statistics
+firmware/Startup/*.s linguist-vendored
+firmware/*.ld linguist-vendored
+firmware/Src/syscalls.c linguist-vendored
+firmware/Src/sysmem.c linguist-vendored
