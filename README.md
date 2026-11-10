@@ -1,20 +1,48 @@
 # STM32 UART Verification
 
-A small device with a defined command protocol, verified end to end: first as bare-metal firmware on an STM32F407, later as SystemVerilog RTL in simulation, both checked against the same specification.
+A small device with a defined command protocol, built and verified from one written specification: a bare-metal UART bring-up on an STM32F407, and the protocol's command logic as SystemVerilog RTL, verified in simulation.
 
 The specification is in [`docs/protocol-spec.md`](docs/protocol-spec.md). Every rule in it has a requirement ID (REQ-F1, REQ-S2, …) so that each test can be traced back to the rule it checks.
 
 ## Status
 
+**Phase 1: SystemVerilog RTL and verification**
+
 | Step | Content | Status |
 | --- | --- | --- |
-| 1 | Protocol spec + bare-metal UART echo | ✅ done |
-| 2 | Command parser + FSM in firmware | planned |
-| 3 | Python/pytest test harness over UART | planned |
-| 4 | Clock-tree configuration (HSE + PLL, MCO output) | planned |
-| 5 | SystemVerilog RTL twin + UVM testbench | planned |
+| 1 | Protocol spec + bare-metal UART echo on the STM32 | ✅ done |
+| 2 | Command FSM in SystemVerilog (`rtl/`) | ✅ written, compiles; tests next |
+| 3 | Command parser + UART RX/TX in SystemVerilog | planned |
+| 4 | SystemVerilog testbench: one directed test per transition-table cell | planned |
+| 5 | UVM environment (driver, monitor, scoreboard) + functional coverage | planned |
 
-**What works today:** the board receives bytes on USART1 and sends each one straight back (echo), tested with a serial terminal at 115200 baud.
+**Phase 2: hardware (optional)**
+
+| Step | Content | Status |
+| --- | --- | --- |
+| 6 | Clock-tree configuration (HSE + PLL, MCO output) | planned |
+| 7 | Command parser + FSM in firmware | planned |
+| 8 | Python/pytest test harness over UART | planned |
+
+**What works today:** the board receives bytes on USART1 and sends each one straight back (echo), tested with a serial terminal at 115200 baud. The command FSM exists as RTL and compiles cleanly with Icarus Verilog and Verilator; it has not been verified by tests yet.
+
+## RTL
+
+`rtl/` holds the SystemVerilog design, written from section 6 of the spec.
+
+| File | Content |
+| --- | --- |
+| `rtl/fsm_pkg.sv` | Package with the state type `state_t` (IDLE, RUNNING, PAUSED, FAULT), shared by the RTL and, later, the testbench |
+| `rtl/fsm.sv` | The command FSM: a state register (`always_ff`, asynchronous reset to IDLE, REQ-S1) and next-state logic (`always_comb`) implementing the 9 transitions of the transition table |
+
+The FSM's inputs are one-clock pulses (`set_mode_run`, `set_mode_pause`, `set_mode_stop`, `trigger_fault`, `clear_fault`) that the command parser will produce from the received text. `PING`, `GET_STATE` and `SET_LED` never change the state, so they don't reach the FSM.
+
+Compile check:
+
+```
+iverilog -g2012 rtl/fsm_pkg.sv rtl/fsm.sv
+verilator --lint-only -Wall rtl/fsm_pkg.sv rtl/fsm.sv
+```
 
 ## Firmware
 
